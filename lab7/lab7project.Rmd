@@ -1,0 +1,234 @@
+---
+title: "lab7R"
+author: "Rachel Kraft"
+date: "2/12/2022"
+output: pdf_document
+---
+
+> Q1) How many rows and columns are in your new data frame named x? What functions could you use to answer this question?
+
+Assign the data set link to url and the read of this csv file to variable x
+```{r}
+url <- "https://tinyurl.com/UK-foods"
+x <- read.csv(url)
+
+#Use the dim() function to find out how many rows and columns there are in x
+
+dim(x)
+```
+Examine the data set to ensure it meets our expectations by using the head() function to print the first 6 rows
+
+```{r}
+head(x)
+```
+
+There are only 4 columns of data, but the dim() function above told us to expect 5. We can fix this by using the rownames() function to set it to the first column. 
+
+```{r}
+rownames(x) <- x[,1]
+# removes the first column with the -1 column index
+x <- x[,-1]
+head(x)
+```
+
+Check the dimensions again to ensure our fix was correct
+
+```{r}
+dim(x)
+```
+
+Another method of solving this problem is to read the data file again and set row.names of the read.csv() function to the first column (row.names=1)
+
+```{r}
+x <- read.csv(url, row.names=1)
+head(x)
+```
+
+
+> Q2) Which approach to solving the 'row-names problem' mentioned above do you prefer and why? Is one approach more robust than another under certain circumstances?
+
+I would prefer the alternate method (the second one) to solve the row-names problem because it involves one simple command with the read.csv() function. If you run the code block for the first approach using the -1 column index, it will keep deleting the first column and our data may be accidentally deleted.
+
+> Spotting major differences and trends
+
+Generating regular bar plots does not help too much with looking for trends and analyzing the data, for example:
+
+```{r}
+barplot(as.matrix(x), beside=T, col=rainbow(nrow(x)))
+```
+
+> Q3) Changing what optional argument in the above barplot() changes it to a horizontally stacked one?
+
+Set beside=FALSE or leave this argument out (the default)
+
+```{r}
+barplot(as.matrix(x), col=rainbow(nrow(x)))
+```
+
+> Q5) Generating all pairwise plots may help. Can you make sense of the following code and resulting figure? What does it mean if a given point lies on the diagonal for a given plot?
+
+The pairs() function returns a matrix of scatterplots for dataset x. It gives a plot of all countries compared against each other. Each plot along each axis is represented by that country. The first column and row represents England, second column is Wales, etc. If the people in both countries eat the same amount, there will be a point along the diagonal line. 
+
+```{r}
+pairs(x, col=rainbow(10), pch=16)
+```
+
+> Q6) What is the main differences between N. Ireland and the other countries of the UK in terms of this data-set?
+
+When comparing N.Ireland to the other countries, the points in the plots generally lie above the diagonal. This means that the values for food consumption from the data-set are generally higher in the other countries than N.Ireland. 
+
+> We can use PCA to make more sense of the data and look for trends. Use the prcomp() PCA function on our data and transpose our data.frame matrix with the t() function
+
+```{r}
+pca <- prcomp(t(x))
+summary(pca)
+```
+
+> Q7) Complete the code below to generate a plot of PC1 vs PC2. The second line adds text labels over the data points
+
+```{r}
+plot(pca$x[,1], pca$x[,2], xlab="PC1", ylab="PC2", xlim=c(-270,500))
+text(pca$x[,1], pca$x[,2], colnames(x))
+```
+
+> Q8) Customize your plot so that the colors of the country names match the colors in our UK and Ireland map and table at the start of this document
+
+```{r}
+#we can provide a color vector as input to the text() function
+country_cols <- c("orange", "red", "blue", "green")
+plot(pca$x[,1], pca$x[,2], xlab="PC1", ylab="PC2", xlim=c(-270,500))
+text(pca$x[,1], pca$x[,2], colnames(x), col=country_cols)
+```
+
+
+As part of the PCA method, usually we want to include enough principal components so 70% of the variation in data is accounted for
+
+- Use the square of pca$sdev to calculate how much variation in the original data each PC accounts for
+
+```{r}
+v <- round(pca$sdev^2/sum(pca$sdev^2)*100)
+v
+```
+```{r}
+## or the second row here
+z <- summary(pca)
+z$importance
+```
+
+We can summarize the above information in a plot of variances with respect to the principal component number
+
+```{r}
+barplot(v, xlab="Principal Component", ylab="Percent Variation")
+```
+
+
+We can use loading scores from the prcomp() returned $rotation component
+
+```{r}
+par(mar=c(10,3,0.35,0))
+barplot(pca$rotation[,1], las=2)
+```
+
+> Q9) Generate a similar 'loadings plot' for PC2. What two food groups feature prominantely and what does PC2 mainly tell us about?
+
+```{r}
+par(mar=c(10,3,0.35,0))
+barplot(pca$rotation[,2], las=2)
+```
+
+> We can see this info together with the main PCA plot in a biplot()
+
+```{r}
+## the inbuilt biplot() can be useful for small datasets
+biplot(pca)
+```
+
+> PCA of RNA-seq data
+
+We will read a small RNA-seq count data set into a data frame called rna.data, where columns are individual samples (cells), and rows are measurements (genes)
+
+```{r}
+url2 <- "https://tinyurl.com/expression-CSV"
+rna.data <- read.csv(url2, row.names=1)
+head(rna.data)
+```
+
+> Q10) How many genes and samples are in this data set?
+
+Do PCA: first take the transpose of our data then create a simple plot of pc1 and pc2
+
+```{r}
+pca <- prcomp(t(rna.data), scale=TRUE)
+plot(pca$x[,1], pca$x[,2], xlab="PC1", ylab="PC2")
+```
+
+Summary of how much variation in the original data each PC accounts for
+
+```{r}
+summary(pca)
+```
+
+```{r}
+plot(pca, main="Quick scree plot")
+```
+
+Use the square of pca$sdev to calculate how much variation each PC accounts for
+
+```{r}
+pca.var <- pca$sdev^2
+pca.var.per <- round(pca.var/sum(pca.var)*100,1)
+pca.var.per
+```
+
+Now use this to generate own scree-plot
+
+```{r}
+barplot(pca.var.per, main="Scree Plot", names.arg=paste0("PC", 1:10), xlab="Principal Component", ylab="Percent Variation")
+```
+
+```{r}
+## A vector of colors for wt and ko samples
+colvec <- colnames(rna.data)
+colvec[grep("wt", colvec)] <- "red"
+colvec[grep("ko", colvec)] <- "blue"
+
+plot(pca$x[,1], pca$x[,2], col=colvec, pch=16,
+     xlab=paste0("PC1 (", pca.var.per[1], "%)"),
+     ylab=paste0("PC2 (", pca.var.per[2], "%)"))
+
+text(pca$x[,1], pca$x[,2], labels = colnames(rna.data), pos=c(rep(4,5), rep(2,5)))
+
+```
+
+Make a data.frame for input for ggplot()
+
+```{r}
+library(ggplot2)
+df <- as.data.frame(pca$x)
+ggplot(df) + 
+  aes(PC1, PC2) + 
+  geom_point()
+```
+
+Add condition specific color or labels for wild-type or knock-out samples
+
+```{r}
+# Add a 'wt' and 'ko' "condition" column
+df$samples <- colnames(rna.data) 
+df$condition <- substr(colnames(rna.data),1,2)
+p <- ggplot(df) + 
+        aes(PC1, PC2, label=samples, col=condition) + 
+        geom_label(show.legend = FALSE)
+p
+
+```
+
+```{r}
+p + labs(title="PCA of RNASeq Data",
+       subtitle = "PC1 clealy seperates wild-type from knock-out samples",
+       x=paste0("PC1 (", pca.var.per[1], "%)"),
+       y=paste0("PC2 (", pca.var.per[2], "%)"),
+       caption="BIMM143 example data") +
+     theme_bw()
+```
+
