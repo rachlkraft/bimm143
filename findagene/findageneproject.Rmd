@@ -1,0 +1,44 @@
+---
+title: "findagene"
+author: "Rachel Kraft"
+date: '2022-03-09'
+output: pdf_document
+---
+
+Read this FASTA format alignment into R with the help of functions in the Bio3D package. Calculate a
+sequence identity matrix (again using a function within the Bio3D package). T
+
+```{r}
+library(bio3d)
+```
+
+
+```{r}
+alignment <- read.fasta("https://www.ebi.ac.uk/Tools/services/rest/muscle/result/muscle-I20220309-011541-0230-74212060-p1m/aln-fasta")
+alignment
+```
+
+
+```{r}
+idmatrix <- seqidentity(alignment2, normalize=TRUE, similarity=FALSE, ncore=1, nseg.scale=1)
+idmatrix
+```
+
+```{r}
+library(pheatmap)
+pheatmap(idmatrix)
+```
+
+```{r}
+smallalign <- read.fasta("https://www.ebi.ac.uk/Tools/services/rest/muscle/result/muscle-I20220310-220725-0235-23848655-p1m/aln-fasta")
+smallalign
+```
+
+```{r}
+blast.pdb(smallalign)
+```
+
+
+
+
+
