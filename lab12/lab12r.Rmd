@@ -1,0 +1,258 @@
+---
+title: "lab12 miniproject"
+output: pdf_document
+date: '2022-02-24'
+---
+
+> Section 1- Differential Expression Analysis
+
+load packages
+
+```{r setup, message=FALSE}
+library(DESeq2)
+library(ggplot2)
+library(AnnotationDbi)
+library(org.Hs.eg.db)
+```
+
+input counts and metadata files
+
+```{r input}
+countData <- read.csv("GSE37704_featurecounts.csv", row.names=1)
+colData <- read.csv("GSE37704_metadata.csv")
+```
+
+inspect
+
+```{r}
+colData
+```
+```{r}
+head(countData)
+```
+
+> Q. Complete the code below to remove the troublesome first column from countData
+
+```{r}
+countData <- as.matrix(countData[,-1])
+head(countData)
+```
+
+> Q. Check on corespondence of colData and countData
+
+```{r}
+all(colData$id == colnames(countData))
+```
+
+> Q. Complete the code below to filter countData to exclude genes (i.e. rows) where we have 0 read count across all samples (i.e. columns).
+
+```{r filter}
+# Filter count data where you have 0 read count across all samples.
+counts <- countData[rowSums(countData) != 0,]
+head(counts)
+```
+
+> Running DESeq2
+
+setup DESeqDataSet object needed for DESeq() and run DESeq pipeline
+
+```{r}
+dds = DESeqDataSetFromMatrix(countData=counts, colData=colData, design=~condition)
+dds <- DESeq(dds)
+```
+
+```{r}
+dds
+```
+
+get results for HoxA1 knockdown vs control siRNA labeled as "hoxa1_kd" and "control_sirna"
+
+```{r}
+res <- results(dds, contrast=c("condition", "hoxa1_kd", "control_sirna"))
+res
+```
+
+> Q. Call the summary() function on your results to get a sense of how many genes are up or down-regulated at the default 0.1 p-value cutoff.
+
+```{r}
+summary(res)
+```
+
+
+> add annotation
+
+```{r}
+columns(org.Hs.eg.db)
+```
+
+> Q. Use the mapIDs() function multiple times to add SYMBOL, ENTREZID and GENENAME annotation to our results by completing the code below.
+
+```{r}
+columns(org.Hs.eg.db)
+
+res$symbol = mapIds(org.Hs.eg.db,
+                    keys=row.names(res), 
+                    keytype="ENSEMBL",
+                    column="SYMBOL",
+                    multiVals="first")
+
+res$entrez = mapIds(org.Hs.eg.db,
+                    keys=row.names(res),
+                    keytype="ENSEMBL",
+                    column="ENTREZID",
+                    multiVals="first")
+
+res$name =   mapIds(org.Hs.eg.db,
+                    keys=row.names(res),
+                    keytype="ENSEMBL",
+                    column="GENENAME",
+                    multiVals="first")
+
+head(res, 10)
+```
+
+
+> Volcano Plot
+
+common summary figure that gives a nice overview of our results
+
+```{r}
+plot( res$log2FoldChange, -log(res$padj) )
+```
+
+try ggplot
+
+```{r}
+tmp <- as.data.frame(res)
+tmp$fc <- abs(res$log2FoldChange) >2
+
+ggplot(tmp)+aes(log2FoldChange, -log(padj), col=fc)+geom_point()
+```
+
+try enhanced volcano package from bioconductor
+
+```{r}
+library(EnhancedVolcano)
+```
+
+
+```{r}
+EnhancedVolcano(tmp, lab= tmp$symbol, x='log2FoldChange', y='pvalue')
+#EnhancedVolcano(res, lab= rownames(res), x='log2FoldChange', y='pvalue')
+
+```
+
+
+
+> pathway analysis and gene set enrichment
+
+help interpret results: which pathways and functions feature heavily in our differentially expressed genes
+
+BiocManager::install( c("pathview", "gage", "gageData") )
+
+```{r}
+library(pathview)
+```
+
+
+kegg.sets.hs is a named list of 229 elements. Each element is a character vector of member gene Entrez IDs for a single KEGG pathway. (See also go.sets.hs). The sigmet.idx.hs is an index of numbers of signaling and metabolic pathways in kegg.set.gs. In other words, KEGG pathway include other types of pathway definitions, like "Global Map" and "Human Diseases", which may be undesirable in a particular pathway analysis. Therefore, kegg.sets.hs[sigmet.idx.hs] gives you the "cleaner" gene sets of signaling and metabolic pathways only.
+
+```{r}
+library(gage)
+library(gageData)
+
+data(kegg.sets.hs)
+data(sigmet.idx.hs)
+
+# Focus on signaling and metabolic pathways only
+kegg.sets.hs = kegg.sets.hs[sigmet.idx.hs]
+
+# Examine the first 3 pathways
+head(kegg.sets.hs, 3)
+
+```
+
+The main gage() function requires a named vector of fold changes, where the names of the values are the Entrez gene IDs.
+
+Note that we used the mapIDs() function above to obtain Entrez gene IDs (stored in res$entrez) and we have the fold change results from DESeq2 analysis (stored in res$log2FoldChange).
+
+
+```{r}
+foldchanges <- res$log2FoldChange
+names(foldchanges) <-  res$entrez
+head(foldchanges)
+```
+
+run gage pathway analysis
+
+```{r}
+# Get the results
+keggres = gage(foldchanges, gsets=kegg.sets.hs)
+```
+
+look at object returned from gage()
+
+```{r}
+attributes(keggres)
+```
+
+look at first 2 pathway results
+
+```{r}
+head(keggres$less, 2)
+```
+
+try out pathview() to make a pathway plot with our RNA-seq expression results. supply a pathway.id from the printout above
+
+```{r}
+pathview(gene.data=foldchanges, pathway.id="hsa04110")
+```
+
+![](hsa04110.pathview.png)
+
+> Section 3: Gene Ontology
+
+can use a different gene set database to provide different info. try GO with focus on biological pathways (BP) component
+
+```{r}
+data(go.sets.hs)
+data(go.subs.hs)
+
+# Focus on Biological Process subset of GO
+gobpsets = go.sets.hs[go.subs.hs$BP]
+
+gobpres = gage(foldchanges, gsets=gobpsets, same.dir=TRUE)
+
+head(gobpres$less)
+```
+
+> Section 4: reactome analysis
+
+Reactome is database consisting of biological molecules and their relation to pathways and processes. We can use as an R package or the website
+
+Now conduct over-representation enrichment analysis and pathway-topology analysis with reactome using previous list of sig genes generated from differential expression results
+
+```{r}
+sig_genes <- res[res$padj <= 0.05 & !is.na(res$padj), "symbol"]
+print(paste("Total number of significant genes:", length(sig_genes)))
+
+write.table(sig_genes, file="significant_genes.txt", row.names=FALSE, col.names=FALSE, quote=FALSE)
+```
+
+Then, to perform pathway analysis online go to the Reactome website (https://reactome.org/PathwayBrowser/#TOOL=AT). Select “choose file” to upload your significant gene list. Then, select the parameters “Project to Humans”, then click “Analyze”.
+
+
+> save results
+
+```{r}
+write.csv(res, file="deseq_results.csv")
+```
+
+
+
+
+
+
+
+
+

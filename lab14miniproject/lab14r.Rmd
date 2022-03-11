@@ -1,0 +1,297 @@
+---
+title: "Lab14: COVID-19 vaccination rate mini project"
+author: "Rachel Kraft"
+date: "2022-03-03"
+output: 
+  pdf_document: 
+    latex_engine: xelatex
+---
+
+
+read data set for vaccination rates
+
+```{r}
+vax <- read.csv("covid19vaccinesbyzipcode_test.csv")
+head(vax)
+```
+
+> Q1. What column details the total number of people fully vaccinated? 
+
+persons_fully_vaccinated
+
+> Q2. What column details the Zip code tabulation area? 
+
+zip_code_tabulation_area
+
+> Q3. What is the earliest date in this dataset? 
+
+2021-01-05
+
+> Q4. What is the latest date in this dataset?
+
+```{r}
+vax$as_of_date[nrow(vax)]
+```
+
+2022-03-01
+
+> call the skim() function from the skimr package to get a quick overview of this dataset
+
+```{r, message=FALSE}
+#install.packages("skimr")
+library(skimr)
+```
+
+```{r}
+skim(vax)
+```
+
+
+> Q5. How many numeric columns are in this dataset? 
+
+9
+
+> Q6. Note that there are “missing values” in the dataset. How many NA values there in the persons_fully_vaccinated column?
+
+18338
+
+> Q7. What percent of persons_fully_vaccinated values are missing (to 2 significant figures)?
+
+```{r}
+round((18338/107604*100),2)
+```
+
+
+> Working with Dates
+
+we can use the lubridate package to more easily work with dates
+
+```{r, message=FALSE}
+#install.packages("lubridate")
+library(lubridate)
+```
+
+```{r}
+age <- today() - ymd("2000-07-18")
+age
+```
+
+```{r}
+time_length(age, "year")
+```
+
+
+convert our date data into a lubridate format
+
+```{r}
+vax$as_of_date <- ymd(vax$as_of_date)
+```
+
+how many days since the first vaccination reported in the data set?
+
+```{r}
+today() - vax$as_of_date[1]
+```
+
+> Q9. How many days have passed since the last update of the dataset? 
+
+```{r}
+today() - vax$as_of_date[nrow(vax)]
+```
+
+> Q10. How many unique dates are in the dataset?
+
+```{r}
+length(unique(vax$as_of_date))
+```
+
+
+> Working with zip codes
+
+use the zipcodeR package
+
+```{r, message=FALSE}
+#install.packages("zipcodeR")
+library(zipcodeR)
+```
+
+locate la jolla
+
+```{r}
+geocode_zip('92037')
+```
+
+calculate the distance between two zipcodes
+
+```{r}
+zip_distance('92037','91362')
+```
+
+use reverse_zipcode() to pull census data
+
+> Focus on San Diego Area
+
+restrict to vax$county == "San Diego" entries
+
+using r
+
+```{r}
+# Subset to San Diego county only areas
+sd <- vax[2,]
+```
+
+```{r}
+library(dplyr)
+
+sd <- filter(vax, county == "San Diego")
+
+nrow(sd)
+```
+
+> Q11. How many distinct zip codes are listed for San Diego County?
+
+```{r}
+length(unique(sd$zip_code_tabulation_area))
+```
+
+
+> Q12. What San Diego County Zip code area has the largest 12 + Population in this dataset?
+
+```{r}
+pop <- which.max(sd$age12_plus_population)
+sd$zip_code_tabulation_area[pop]
+```
+
+Using dplyr select all San Diego “county” entries on “as_of_date” “2022-02-22” 
+
+```{r}
+feb <- filter(sd, as_of_date=="2022-02-22")
+```
+
+
+> Q13. What is the overall average “Percent of Population Fully Vaccinated” value for all San Diego “County” as of “2022-02-22”? 
+
+```{r}
+sd$as_of_date[nrow(sd)]
+```
+
+let's work with the most recent data
+
+```{r}
+latest <- filter(sd, as_of_date=="2022-03-01")
+mean(latest$percent_of_population_fully_vaccinated, na.rm=TRUE)
+```
+
+
+> Q14. Using either ggplot or base R graphics make a summary figure that shows the distribution of Percent of Population Fully Vaccinated values as of “2022-03-01”?
+
+```{r, message=FALSE}
+library(ggplot2)
+```
+
+```{r}
+ggplot(latest)+aes(percent_of_population_fully_vaccinated)+geom_histogram()
+```
+
+> Focus on UCSD/La Jolla
+
+```{r}
+ucsd <- filter(sd, zip_code_tabulation_area=="92037")
+ucsd[1,]$age5_plus_population
+```
+
+> Q15. Using ggplot make a graph of the vaccination rate time course for the 92037 ZIP code area
+
+```{r}
+baseplot <- ggplot(ucsd) +
+  aes(x=as_of_date,
+      y=percent_of_population_fully_vaccinated) +
+  geom_point()+
+  geom_line() +
+  geom_line(group=1) +
+  ylim(c(0,1)) +
+  labs(x="Date", y="Percent Vaccinated", title="Vaccination rate for La Jolla 92037")
+baseplot
+```
+
+> Comparing to similar sized areas
+
+```{r}
+# Subset to all CA areas with a population as large as 92037
+vax.36 <- filter(vax, age5_plus_population > 36144 &
+                as_of_date == "2022-03-01")
+
+#head(vax.36)
+```
+
+
+> Q16. Calculate the mean “Percent of Population Fully Vaccinated” for ZIP code areas with a population as large as 92037 (La Jolla) as_of_date “2022-03-01”. Add this as a straight horizontal line to your plot from above with the geom_hline() function?
+
+```{r}
+ave.36 <- mean(vax.36$percent_of_population_fully_vaccinated, na.rm=TRUE)
+ave.36
+```
+
+```{r}
+baseplot+geom_hline(yintercept=ave.36)
+```
+
+
+> Q17. What is the 6 number summary (Min, 1st Qu., Median, Mean, 3rd Qu., and Max) of the “Percent of Population Fully Vaccinated” values for ZIP code areas with a population as large as 92037 (La Jolla) as_of_date “2022-03-01”?
+
+```{r}
+summary(vax.36$percent_of_population_fully_vaccinated)
+```
+
+
+> Q18. Using ggplot generate a histogram of this data.
+
+```{r}
+ggplot(vax.36) +
+  aes(percent_of_population_fully_vaccinated) +
+  geom_histogram() +
+  xlim(c(0,1))
+```
+
+> Q19. Is the 92109 and 92040 ZIP code areas above or below the average value you calculated for all these above?
+
+```{r}
+vax %>% filter(as_of_date == "2022-03-01") %>%  
+  filter(zip_code_tabulation_area=="92040") %>%
+  select(percent_of_population_fully_vaccinated)
+
+vax %>% filter(as_of_date == "2022-03-01") %>%  
+  filter(zip_code_tabulation_area=="92109") %>%
+  select(percent_of_population_fully_vaccinated)
+```
+
+both areas have a lower fully vaccinated average
+
+> Q20. Finally make a time course plot of vaccination progress for all areas in the full dataset with a age5_plus_population > 36144
+
+```{r}
+vax.36.all <- filter(vax, age5_plus_population > 36144)
+
+
+ggplot(vax.36.all) +
+  aes(as_of_date,
+      percent_of_population_fully_vaccinated, 
+      group=zip_code_tabulation_area) +
+  geom_line(alpha=0.2, color="blue") +
+  ylim(c(0,1)) +
+  labs(x="Date", y="Percent Vaccinated",
+       title="Vaccination rate across California",
+       subtitle="Only areas with a population above 36K are shown") +
+  geom_hline(yintercept = ave.36, linetype=2)
+```
+> 21. How do you feel about traveling for Spring Break and meeting for in-person class afterwards?
+
+I think it is okay as long as everyone is testing after they come back, but I doubt that most people would do that so it makes me question if we should go back in person immediately. However, I don't think classes should be online anymore, that if everyone is wearing masks inside it should be fine.
+
+
+
+
+
+
+
+
